@@ -67,7 +67,10 @@ func main() {
 func (mv mover) copyFiles(files []*files.FileMetadata) {
 	if mv.paths.CopyPath == "" {
 		log.Warn("No copy path.")
+
+		return
 	}
+
 	for _, f := range files {
 		copyPath := mv.createCopyFilePath(f.Name)
 
@@ -81,7 +84,10 @@ func (mv mover) copyFiles(files []*files.FileMetadata) {
 func (mv mover) moveFiles(files []*files.FileMetadata) {
 	if mv.paths.MovePath == "" {
 		log.Warn("No move path.")
+		return
+
 	}
+
 	for _, f := range files {
 		mvPath := mv.createMoveFilePath(f.Name)
 
