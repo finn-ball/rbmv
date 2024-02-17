@@ -1,5 +1,5 @@
 # rbmv
-Moving files in dropbox from one place to another.
+Moving and copying files in dropbox from one place to another.
 
 ```
 go run main.go
@@ -27,9 +27,9 @@ curl --location --request POST 'https://api.dropboxapi.com/oauth2/token' \
 --data-urlencode 'grant_type=authorization_code'
 ```
 
-Paste the `App secret`, `App key` and the `refresh_token` in the response into:
+Paste the `App secret`, `App key` and the `refresh_token` in the response into the `settings.toml` file:
 ```
-var CLIENT_ID = "" # App key
-var CLIENT_SECRET = "" # App secret
-var REFRESH_TOKEN = "" # Refresh token
+var ClientID = "" # App key
+var ClientSecret = "" # App secret
+var RefreshToken = "" # Refresh token
 ```

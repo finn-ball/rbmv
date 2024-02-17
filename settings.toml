@@ -1,0 +1,10 @@
+[Paths]
+SrcPath = ""
+CopyPath = ""
+MovePath = ""
+
+[Auth]
+ClientID = ""
+ClientSecret = ""
+RefreshToken = ""
+

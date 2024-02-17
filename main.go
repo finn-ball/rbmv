@@ -2,64 +2,106 @@ package main
 
 import (
 	"context"
-	"log"
 
+	"github.com/charmbracelet/log"
+
+	"github.com/BurntSushi/toml"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox/files"
 	"golang.org/x/oauth2"
 )
 
-var CLIENT_ID = ""
-var CLIENT_SECRET = ""
-var REFRESH_TOKEN = ""
-
-var srcPath string = ""
-var dstPath string = ""
-var binFolder string = ""
-
-type mover struct {
-	client                          files.Client
-	srcFolder, dstFolder, binFolder string
+type Config struct {
+	Paths Paths
+	Auth  Auth
 }
 
-func newMover(token, srcFolder, dstFolder string) *mover {
+type Paths struct {
+	SrcPath  string
+	CopyPath string
+	MovePath string
+}
+
+type Auth struct {
+	ClientID     string
+	ClientSecret string
+	RefreshToken string
+}
+
+type mover struct {
+	client files.Client
+	paths  Paths
+}
+
+const formatDisplay = "%s from %-40s to %s"
+
+func newMover(token string, paths Paths) *mover {
 	config := dropbox.Config{
 		Token: token,
 	}
 	client := files.New(config)
 	return &mover{
-		client:    client,
-		srcFolder: srcFolder,
-		dstFolder: dstFolder,
-		binFolder: binFolder,
+		client: client,
+		paths:  paths,
 	}
 }
 
 func main() {
 
-	token := getToken(CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN)
-	mv := newMover(token, srcPath, dstPath)
+	log.Info("Welcome, let's move some files!")
 
-	files, err := mv.listAllFilesInFolder(srcPath)
-	if err != nil {
-		log.Fatalln("Could not list files: ", err)
+	var config Config
+
+	if _, err := toml.DecodeFile("settings.toml", &config); err != nil {
+		log.Fatal("Could not read settings file.\nError: ", err)
 	}
-	if len(files) < 1 {
-		log.Println("No files to copy")
+
+	token := getToken(config.Auth.ClientID, config.Auth.ClientSecret, config.Auth.RefreshToken)
+
+	mv := newMover(token, config.Paths)
+	files := mv.listFiles()
+	mv.copyFiles(files)
+	mv.moveFiles(files)
+}
+
+func (mv mover) copyFiles(files []*files.FileMetadata) {
+	if mv.paths.CopyPath == "" {
+		log.Warn("No copy path.")
 	}
-	width := 50
 	for _, f := range files {
-		copyPath := mv.createDstFilePath(f.Name)
-		log.Printf("Copying %-*s %s", width, f.PathDisplay, copyPath)
+		copyPath := mv.createCopyFilePath(f.Name)
+
+		log.Infof(formatDisplay, "copying ", f.PathDisplay, copyPath)
 		if err := mv.copyFile(f.PathLower, copyPath); err != nil {
 			log.Fatalf("Could not copy file (%s) to (%s)\n Error: %s", f.PathDisplay, copyPath, err)
 		}
-		mvPath := mv.createBinFilePath(f.Name)
+	}
+}
 
+func (mv mover) moveFiles(files []*files.FileMetadata) {
+	if mv.paths.MovePath == "" {
+		log.Warn("No move path.")
+	}
+	for _, f := range files {
+		mvPath := mv.createMoveFilePath(f.Name)
+
+		log.Infof(formatDisplay, "moving ", f.PathDisplay, mvPath)
 		if err := mv.moveFile(f.PathLower, mvPath); err != nil {
 			log.Fatalf("Could not move file (%s) to (%s)\n Error: %s", f.PathDisplay, mvPath, err)
 		}
 	}
+}
+
+func (mv mover) listFiles() []*files.FileMetadata {
+	files, err := mv.listAllFilesInFolder(mv.paths.SrcPath)
+	if err != nil {
+		log.Fatal("Could not list files: ", err)
+	}
+	if len(files) < 1 {
+		log.Fatal("No source files. Are the settings correct?")
+	}
+
+	return files
 }
 
 func getToken(clientID, clientSecret, refreshToken string) string {
@@ -77,29 +119,31 @@ func getToken(clientID, clientSecret, refreshToken string) string {
 
 	token, err := tokenSource.Token()
 	if err != nil {
-		log.Fatalf("Failed to refresh token: %v", err)
+		log.Fatal("Failed to refresh token: ", err)
 	}
 
 	return token.AccessToken
 }
 
-func (mv mover) createDstFilePath(name string) string {
-	return mv.dstFolder + "/" + name
+func (mv mover) createCopyFilePath(name string) string {
+	return mv.paths.CopyPath + "/" + name
 }
 
-func (mv mover) createBinFilePath(name string) string {
-	return mv.binFolder + "/" + name
+func (mv mover) createMoveFilePath(name string) string {
+	return mv.paths.MovePath + "/" + name
 }
 
 func (mv mover) moveFile(src, dst string) error {
 	arg := files.NewRelocationArg(src, dst)
 	_, err := mv.client.MoveV2(arg)
+
 	return err
 }
 
 func (mv mover) copyFile(src, dst string) error {
 	arg := files.NewRelocationArg(src, dst)
 	_, err := mv.client.CopyV2(arg)
+
 	return err
 }
 
@@ -131,5 +175,6 @@ func collectPaths(res *files.ListFolderResult) []*files.FileMetadata {
 			fileList = append(fileList, file)
 		}
 	}
+
 	return fileList
 }
